@@ -1,0 +1,59 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect BasaltNotes",
+        "description": "The vault holds the instructions and the memory of your voice assistant. It is created if it does not exist yet.",
+        "data": {
+          "url": "Server address",
+          "token": "API token",
+          "vault_name": "Name of the vault"
+        },
+        "data_description": {
+          "url": "For example http://nas.local:4400",
+          "token": "A token with the permission to create vaults (create_vault) is enough. In BasaltNotes: Settings → API tokens."
+        }
+      },
+      "reauth_confirm": {
+        "title": "New API token",
+        "description": "BasaltNotes no longer accepts the stored token.",
+        "data": {
+          "token": "API token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "The server cannot be reached.",
+      "invalid_auth": "The token is invalid or may not access this vault.",
+      "unknown": "Unexpected answer from the server, see the log."
+    },
+    "abort": {
+      "already_configured": "This vault is already connected.",
+      "single_instance_allowed": "BasaltNotes is already set up.",
+      "reauth_successful": "The new token has been saved."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "BasaltNotes",
+        "data": {
+          "memory_budget": "Characters of memory in the prompt"
+        },
+        "data_description": {
+          "memory_budget": "The newest facts up to this length are always known to the assistant, older ones it finds through its search tool. Small local models need a small value."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "instructions": {
+        "name": "Instructions"
+      },
+      "memories": {
+        "name": "Remembered facts"
+      }
+    }
+  }
+}
