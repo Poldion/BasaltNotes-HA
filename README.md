@@ -19,9 +19,10 @@ BasaltNotes or Obsidian, with git history and a trash.
 | Area | What it does |
 |---|---|
 | **Own vault** | Created automatically during setup; an existing vault of the same name is used as it is |
-| **Instructions** | Every note in `Instructions/` goes into the system prompt, sorted by path. `enabled: false` in the frontmatter switches a note off |
+| **Instructions** | Notes directly in `Instructions/` are always part of the system prompt, sorted by path, so keep them short. `enabled: false` in the frontmatter switches a note off |
 | **Corrections** | “That was wrong, I meant …” is stored as a note in `Instructions/Learned/`: title = when, text = then |
-| **Memory** | Facts are notes in `Memory/`. The newest are always in the prompt up to a set length, older ones are found by a search tool |
+| **Small prompts** | Corrections and facts are searched for each question. Only the best matches go into the prompt, so it does not grow with the number of notes |
+| **Memory** | Facts are notes in `Memory/`. The assistant gets the matching ones with the question and can also look them up with a tool |
 | **Tools** | `remember`, `recall`, `forget`, `learn_instruction`, `forget_instruction` |
 | **Protected rules** | The tools only touch `Memory/` and `Instructions/Learned/`. Your own instructions cannot be changed by voice |
 | **Offline** | A copy is kept in Home Assistant. If the server does not answer within 2 seconds, the assistant works with that copy |
@@ -55,7 +56,7 @@ The folders are named in the language of your Home Assistant when the vault is c
 
 | Option | Default | Meaning |
 |---|---|---|
-| Characters of memory in the prompt | `1500` | Length of the facts that are always known. `0` = only through the search tool |
+| Characters of matching notes per question | `600` | Upper limit for corrections and facts in the prompt, at most 5 notes. `0` = facts only through the search tool |
 
 Changes in the vault apply to the next conversation, at most 60 seconds later.
 

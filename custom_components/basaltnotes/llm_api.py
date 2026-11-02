@@ -6,6 +6,7 @@ from typing import Any
 
 import probatio
 
+from homeassistant.components.conversation.chat_log import current_chat_log
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import llm
 
@@ -131,6 +132,14 @@ class ForgetInstructionTool(_VaultTool):
         return {"ok": await self.vault.async_forget_learned(args["when"])}
 
 
+def _current_question() -> str | None:
+    """Return what the user just said; Home Assistant adds it to the chat log before asking for the prompt."""
+    chat_log = current_chat_log.get()
+    if chat_log is None:
+        return None
+    return next((c.content for c in reversed(chat_log.content) if c.role == "user"), None)
+
+
 class BasaltLLMAPI(llm.API):
     """The vault as an LLM API, optionally together with the Assist tools."""
 
@@ -144,7 +153,7 @@ class BasaltLLMAPI(llm.API):
 
     async def async_get_api_instance(self, llm_context: llm.LLMContext) -> llm.APIInstance:
         """Return the prompt and the tools for one conversation."""
-        prompt = await self.vault.async_get_prompt()
+        prompt = await self.vault.async_get_prompt(_current_question())
         tools: list[llm.Tool] = [
             tool(self.vault)
             for tool in (

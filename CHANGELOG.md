@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0] – 2026-11-02
+
+### Changed
+
+- Corrections and facts are no longer all part of the prompt. They are searched for each question, and only the best matches are added, so the prompt no longer grows with the number of notes.
+- The explanation of the tools in the prompt is shorter.
+- The option for the prompt length now limits the matching notes per question; its default is 600 characters.
+
 ## [0.1.1] – 2026-11-02
 
 ### Fixed

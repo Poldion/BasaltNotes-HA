@@ -19,9 +19,10 @@ Notiz, die du in BasaltNotes oder Obsidian lesen und ändern kannst, mit Git-Ver
 | Bereich | Was es tut |
 |---|---|
 | **Eigener Vault** | Wird bei der Einrichtung automatisch angelegt; ein vorhandener Vault gleichen Namens wird unverändert genutzt |
-| **Anweisungen** | Jede Notiz in `Anweisungen/` kommt in den Systemprompt, sortiert nach Pfad. `enabled: false` in den Eigenschaften schaltet eine Notiz ab |
+| **Anweisungen** | Notizen direkt in `Anweisungen/` stehen immer im Systemprompt, sortiert nach Pfad, halte sie also kurz. `enabled: false` in den Eigenschaften schaltet eine Notiz ab |
 | **Korrekturen** | „Das war falsch, ich meinte …“ wird als Notiz in `Anweisungen/Gelernt/` gespeichert: Titel = Wenn, Text = Dann |
-| **Gedächtnis** | Fakten sind Notizen in `Gedächtnis/`. Die neuesten stehen bis zu einer einstellbaren Länge immer im Prompt, ältere findet ein Suchwerkzeug |
+| **Kleine Prompts** | Korrekturen und Fakten werden zu jeder Frage durchsucht. Nur die besten Treffer kommen in den Prompt, er wächst also nicht mit der Zahl der Notizen |
+| **Gedächtnis** | Fakten sind Notizen in `Gedächtnis/`. Der Assistent bekommt die passenden mit der Frage und kann sie auch per Werkzeug suchen |
 | **Werkzeuge** | `remember`, `recall`, `forget`, `learn_instruction`, `forget_instruction` |
 | **Geschützte Regeln** | Die Werkzeuge ändern nur `Gedächtnis/` und `Anweisungen/Gelernt/`. Deine eigenen Anweisungen lassen sich nicht per Sprache ändern |
 | **Offline** | Home Assistant behält eine Kopie. Antwortet der Server nicht innerhalb von 2 Sekunden, arbeitet der Assistent mit dieser Kopie |
@@ -55,7 +56,7 @@ Die Ordner heißen so wie die Sprache deines Home Assistant beim Verbinden (Engl
 
 | Option | Standard | Bedeutung |
 |---|---|---|
-| Zeichen Gedächtnis im Prompt | `1500` | Länge der Fakten, die immer bekannt sind. `0` = nur über das Suchwerkzeug |
+| Zeichen passender Notizen je Frage | `600` | Obergrenze für Korrekturen und Fakten im Prompt, höchstens 5 Notizen. `0` = Fakten nur über das Suchwerkzeug |
 
 Änderungen im Vault gelten ab dem nächsten Gespräch, spätestens nach 60 Sekunden.
 

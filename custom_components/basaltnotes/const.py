@@ -12,7 +12,7 @@ CONF_MEMORY_FOLDER: Final = "memory_folder"
 CONF_MEMORY_BUDGET: Final = "memory_budget"
 
 DEFAULT_VAULT_NAME: Final = "Home Assistant Assist"
-DEFAULT_MEMORY_BUDGET: Final = 1500
+DEFAULT_MEMORY_BUDGET: Final = 600
 
 # The two LLM APIs. "basaltnotes" can be combined with others in the agent settings, but Home Assistant
 # then prefixes every tool name. "basaltnotes_assist" contains the Assist tools under their usual names,

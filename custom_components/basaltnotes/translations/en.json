@@ -38,10 +38,10 @@
       "init": {
         "title": "BasaltNotes",
         "data": {
-          "memory_budget": "Characters of memory in the prompt"
+          "memory_budget": "Characters of matching notes per question"
         },
         "data_description": {
-          "memory_budget": "The newest facts up to this length are always known to the assistant, older ones it finds through its search tool. Small local models need a small value."
+          "memory_budget": "Corrections and facts are searched for each question, and only the best matches go into the prompt, up to this length. The rest costs nothing."
         }
       }
     }

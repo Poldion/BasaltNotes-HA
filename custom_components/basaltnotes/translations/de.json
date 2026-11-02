@@ -38,10 +38,10 @@
       "init": {
         "title": "BasaltNotes",
         "data": {
-          "memory_budget": "Zeichen Gedächtnis im Prompt"
+          "memory_budget": "Zeichen passender Notizen je Frage"
         },
         "data_description": {
-          "memory_budget": "Die neuesten Fakten bis zu dieser Länge kennt der Assistent immer, ältere findet er über sein Suchwerkzeug. Kleine lokale Modelle brauchen einen kleinen Wert."
+          "memory_budget": "Korrekturen und Fakten werden zu jeder Frage durchsucht, nur die besten Treffer kommen bis zu dieser Länge in den Prompt. Der Rest kostet nichts."
         }
       }
     }

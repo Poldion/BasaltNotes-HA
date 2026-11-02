@@ -5,33 +5,58 @@ import pytest
 from custom_components.basaltnotes.api import BasaltConnectionError
 
 
-async def test_prompt_contains_instructions_corrections_and_memory(vault, client):
+async def test_prompt_has_fixed_instructions_and_only_matching_notes(vault, client):
     client.add("Anweisungen", "2 Regeln", "Antworte knapp.")
     client.add("Anweisungen", "1 Persona", "Du bist GLaDOS.")
-    client.add("Anweisungen/Gelernt", "Gute Nacht", "Bett-Schaltung an")
     client.add("Anweisungen", "Aus", "Nicht verwenden.", enabled=False)
+    client.add("Anweisungen/Gelernt", "Wenn ich gute Nacht sage", "Bett-Schaltung an")
+    client.add("Anweisungen/Gelernt", "Stopp den Timer", "Timer abbrechen")
     client.add("Gedächtnis", "Auto", "Das Auto steht in Reihe 3.")
     await vault.async_refresh()
 
-    prompt = vault.build_prompt()
+    prompt = vault.build_prompt("Gute Nacht!")
 
     assert prompt.index("Du bist GLaDOS.") < prompt.index("Antworte knapp.")
-    assert "- Wenn: Gute Nacht -> Dann: Bett-Schaltung an" in prompt
-    assert "- Das Auto steht in Reihe 3." in prompt
     assert "Nicht verwenden." not in prompt
+    assert "- Wenn: Wenn ich gute Nacht sage -> Dann: Bett-Schaltung an" in prompt
+    assert "Timer abbrechen" not in prompt
+    assert "Reihe 3" not in prompt
 
 
-async def test_memory_budget_keeps_the_newest(vault, client):
-    client.add("Gedächtnis", "Alt", "A" * 50)
-    client.add("Gedächtnis", "Mittel", "B" * 50)
-    client.add("Gedächtnis", "Neu", "C" * 50)
+async def test_prompt_does_not_grow_with_unrelated_notes(vault, client):
+    client.add("Anweisungen", "Persona", "Du bist GLaDOS.")
+    await vault.async_refresh()
+    before = vault.build_prompt("Wie warm ist es im Bad?")
+
+    for number in range(200):
+        client.add("Gedächtnis", f"Fakt {number}", f"Der Schrank {number} enthält Werkzeug.")
     await vault.async_refresh()
 
-    prompt = vault.build_prompt()
+    assert vault.build_prompt("Wie warm ist es im Bad?") == before
 
-    assert "C" * 50 in prompt
-    assert "A" * 50 not in prompt
-    assert "Weitere 2 gemerkte Fakten" in prompt
+
+async def test_filler_words_alone_select_nothing(vault, client):
+    client.add("Anweisungen/Gelernt", "Wenn ich sage, dass es kalt ist", "Heizung an")
+    await vault.async_refresh()
+
+    assert vault.select_for("Wenn ich das sage, was ist dann?") == []
+
+
+async def test_rare_word_decides(vault, client):
+    client.add("Anweisungen/Gelernt", "Licht im Bad", "Spiegelleuchte an")
+    client.add("Anweisungen/Gelernt", "Licht im Flur", "Decke an")
+    client.add("Anweisungen/Gelernt", "Licht im Labor", "Regal an")
+    await vault.async_refresh()
+
+    assert [n.title for n in vault.select_for("Mach das Licht im Bad an")] == ["Licht im Bad"]
+
+
+async def test_selection_respects_the_budget(vault, client):
+    client.add("Gedächtnis", "Auto 1", "Auto " + "x" * 30)
+    client.add("Gedächtnis", "Auto 2", "Auto " + "y" * 30)
+    await vault.async_refresh()
+
+    assert len(vault.select_for("Auto")) == 1
 
 
 async def test_only_changed_notes_are_fetched_again(vault, client):
@@ -55,7 +80,7 @@ async def test_prompt_survives_an_offline_server(vault, client):
     vault._fetched_at = 0.0
     client.offline = True
 
-    assert "Du bist GLaDOS." in await vault.async_get_prompt()
+    assert "Du bist GLaDOS." in await vault.async_get_prompt(None)
 
 
 async def test_copy_survives_a_restart(hass, vault, client):
@@ -66,7 +91,7 @@ async def test_copy_survives_a_restart(hass, vault, client):
 
     await vault.async_load()
 
-    assert "Du bist GLaDOS." in vault.build_prompt()
+    assert "Du bist GLaDOS." in vault.build_prompt(None)
 
 
 async def test_remember_ignores_duplicates(vault, client):

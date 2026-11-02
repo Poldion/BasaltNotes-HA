@@ -15,10 +15,11 @@ from custom_components.basaltnotes.const import (
     LLM_API_ASSIST_ID,
     LLM_API_ID,
 )
+from homeassistant.components.conversation.chat_log import UserContent, async_get_chat_log
 from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
 from homeassistant.const import CONF_TOKEN, CONF_URL
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import llm
+from homeassistant.helpers import chat_session, llm
 from homeassistant.setup import async_setup_component
 
 INPUT = {CONF_URL: "http://nas.local:4400", CONF_TOKEN: "bn_test", CONF_VAULT_NAME: "Assist"}
@@ -171,3 +172,16 @@ async def test_tool_writes_to_the_vault_and_reports_offline(hass, client):
     )
     assert result.error
     assert result.data["ok"] is False
+
+
+async def test_api_selects_by_the_current_question(hass, client):
+    client.add("Gedächtnis", "Auto", "Das Auto steht in Reihe 3.")
+    client.add("Gedächtnis", "Rad", "Das Fahrrad steht im Keller.")
+    await _setup(hass, client)
+
+    with chat_session.async_get_chat_session(hass) as session, async_get_chat_log(hass, session) as chat_log:
+        chat_log.async_add_user_content(UserContent(content="Wo ist mein Auto?"))
+        instance = await llm.async_get_api(hass, LLM_API_ID, _context())
+
+    assert "Reihe 3" in instance.api_prompt
+    assert "Keller" not in instance.api_prompt
