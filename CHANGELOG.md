@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1] – 2026-11-02
+
+### Fixed
+
+- Translations no longer contain a URL, which Home Assistant's validation does not allow.
+- The manifest now names its integration category.
+
 ## [0.1.0] – 2026-11-02
 
 ### Added

@@ -10,7 +10,7 @@
           "vault_name": "Name des Vaults"
         },
         "data_description": {
-          "url": "Zum Beispiel http://nas.local:4400",
+          "url": "Die Adresse deines BasaltNotes-Servers, mit Port",
           "token": "Ein Token mit dem Recht, Vaults anzulegen (create_vault), genügt. In BasaltNotes: Einstellungen → API-Tokens."
         }
       },
