@@ -178,6 +178,7 @@ TEXTS = {
     "de": {
         "instructions_folder": "Anweisungen",
         "learned_folder": "Gelernt",
+        "when": "Wenn",
         "memory_folder": "Gedächtnis",
         "seed_title": "Grundregeln",
         "seed_body": "Du bist der Sprachassistent dieses Zuhauses. Antworte knapp und auf Deutsch.",
@@ -213,6 +214,7 @@ TEXTS = {
     "en": {
         "instructions_folder": "Instructions",
         "learned_folder": "Learned",
+        "when": "When",
         "memory_folder": "Memory",
         "seed_title": "Ground rules",
         "seed_body": "You are the voice assistant of this home. Keep your answers short.",
@@ -256,6 +258,19 @@ def texts_for(language: str) -> dict[str, str]:
 
 def _normalize(text: str) -> str:
     return " ".join(text.casefold().split())
+
+
+# A situation that starts like this lacks its "Wenn"/"When": "Ich sage X" becomes "Wenn ich sage X".
+_SUBJECTS = frozenset(["ich", "du", "jemand", "man", "wir", "i", "you", "someone", "we"])
+
+
+def _tidy_when(text: str, when_word: str) -> str:
+    """Tidy a situation and make it a "Wenn ..." clause if the model left the word out."""
+    text = _tidy(text, sentence=False)
+    first = text.split(" ", 1)[0].casefold()
+    if first in _SUBJECTS:
+        text = f"{when_word} {text[:1].lower() if first != 'i' else 'I'}{text[1:]}"
+    return text
 
 
 def _tidy(text: str, *, sentence: bool) -> str:
@@ -519,7 +534,7 @@ class AssistVault:
 
     async def async_learn(self, when: str, then: str) -> None:
         """Store a correction; the same wording replaces the old one."""
-        when, then = _tidy(when, sentence=False), _tidy(then, sentence=True)
+        when, then = _tidy_when(when, self.texts["when"]), _tidy(then, sentence=True)
         await self.async_refresh()
         if note := self._find_learned(when):
             await self.client.async_update_note(self.vault_id, note.id, note.title, then)

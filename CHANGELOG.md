@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.2] – 2026-11-12
+
+### Fixed
+
+- A learned situation that starts with “ich”, “du”, “jemand” or “man” (“I”, “you” …) gets the missing “Wenn”/“When” in front.
+
 ## [0.2.1] – 2026-11-12
 
 ### Fixed

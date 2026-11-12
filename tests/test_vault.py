@@ -189,5 +189,12 @@ async def test_learn_removes_quotes_around_everything(vault, client):
     await vault.async_learn("'jemand fragt nach Kuchen'", "Sag, dass der Kuchen eine Lüge ist!")
 
     assert [(n.title, n.text) for n in vault.learned] == [
-        ("Jemand fragt nach Kuchen", "Sag, dass der Kuchen eine Lüge ist!")
+        ("Wenn jemand fragt nach Kuchen", "Sag, dass der Kuchen eine Lüge ist!")
     ]
+
+
+async def test_learn_adds_the_missing_when(vault, client):
+    await vault.async_learn("Ich sage „Zitronenkuchen“", "Nenne die Uhrzeit")
+    await vault.async_learn("Gute Nacht", "Licht aus")
+
+    assert sorted(n.title for n in vault.learned) == ["Gute Nacht", "Wenn ich sage „Zitronenkuchen“"]
