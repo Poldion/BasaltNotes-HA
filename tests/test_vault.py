@@ -198,3 +198,90 @@ async def test_learn_adds_the_missing_when(vault, client):
     await vault.async_learn("Gute Nacht", "Licht aus")
 
     assert sorted(n.title for n in vault.learned) == ["Gute Nacht", "Wenn ich sage „Zitronenkuchen“"]
+
+
+ROOMS = {"labor": {"labor", "hobbyraum"}, "kueche": {"küche"}, "bad": {"bad", "badezimmer"}}
+
+
+async def test_meaning_finds_what_words_miss(smart_vault, client):
+    client.add("Anweisungen/Gelernt", "Wenn ich nach der Uhrzeit frage", "Rufe GetDateTime auf.")
+    client.add("Anweisungen/Gelernt", "Schalte alle Lichter aus", "Jedes Licht ausschalten.")
+    await smart_vault.async_refresh()
+    question = "Wie spät ist es?"
+
+    assert smart_vault.select_for(question) == []
+    vector = await smart_vault._async_question_vector(question)
+    assert [n.title for n in smart_vault.select_for(question, question_vector=vector)] == [
+        "Wenn ich nach der Uhrzeit frage"
+    ]
+
+
+async def test_words_decide_when_the_embedder_is_down(smart_vault, client, embedder):
+    client.add("Anweisungen/Gelernt", "Stopp den Timer", "Timer abbrechen.")
+    await smart_vault.async_refresh()
+    embedder.offline = True
+
+    prompt = await smart_vault.async_get_prompt("Stopp den Timer")
+
+    assert "Timer abbrechen." in prompt
+
+
+async def test_vectors_are_kept_until_a_note_changes(smart_vault, client, embedder):
+    note_id = client.add("Gedächtnis", "Auto", "Das Auto steht in Reihe 3.")
+    await smart_vault.async_refresh()
+    await smart_vault.async_refresh()
+    assert embedder.calls == 1
+
+    await client.async_update_note("assist", note_id, "Auto", "Das Auto steht in Reihe 4.")
+    await smart_vault.async_refresh()
+    assert embedder.calls == 2
+
+
+async def test_recall_by_meaning(smart_vault, client):
+    client.add("Gedächtnis", "Auto", "Das Auto steht in Reihe 3.")
+    client.add("Gedächtnis", "Lisa", "Lisa mag keinen Koriander.")
+
+    facts, total = await smart_vault.async_recall("Wo habe ich geparkt?")
+
+    assert facts == ["Das Auto steht in Reihe 3."]
+    assert total == 2
+
+
+async def test_notes_about_another_room_stay_out(vault, client):
+    client.add("Anweisungen/Gelernt", "Licht im Labor", "Laborlicht an, Druckerlicht aus.")
+    client.add("Anweisungen/Gelernt", "Licht in der Küche", "Nur die Deckenlampe.")
+    await vault.async_refresh()
+    vault.memory_budget = 600
+
+    in_kitchen = vault.select_for("Mach das Licht an", here="kueche", rooms=ROOMS)
+    asked_for_lab = vault.select_for("Mach das Licht im Hobbyraum an", here="kueche", rooms=ROOMS)
+    no_room_known = vault.select_for("Mach das Licht an", rooms=ROOMS)
+
+    assert [n.title for n in in_kitchen] == ["Licht in der Küche"]
+    assert [n.title for n in asked_for_lab] == ["Licht im Labor"]
+    assert len(no_room_known) == 2
+
+
+async def test_room_names_in_compounds(vault, client):
+    client.add("Anweisungen/Gelernt", "Laborlicht", "Nur das Regal.")
+    await vault.async_refresh()
+
+    assert vault.select_for("Mach das Licht an", here="kueche", rooms=ROOMS) == []
+
+
+async def test_same_situation_in_other_words_replaces(vault, client):
+    await vault.async_learn("Wenn ich gute Nacht sage", "Licht aus")
+    replaced = await vault.async_learn("ich sage gute Nacht", "Bett-Schaltung an und Licht aus")
+
+    assert replaced == "Wenn ich gute Nacht sage"
+    assert [(n.title, n.text) for n in vault.learned] == [
+        ("Wenn ich sage gute Nacht", "Bett-Schaltung an und Licht aus.")
+    ]
+
+
+async def test_different_situations_stay_apart(vault, client):
+    await vault.async_learn("Licht im Bad", "Spiegelleuchte an")
+    replaced = await vault.async_learn("Licht im Flur", "Decke an")
+
+    assert replaced is None
+    assert len(vault.learned) == 2

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0] – 2026-11-12
+
+### Added
+
+- Optional embedding server (OpenAI-compatible, e.g. Ollama with EmbeddingGemma): corrections and facts are chosen by meaning, and `recall` searches by meaning. Without the server, or if it does not answer within 1.5 seconds, the words decide as before.
+- Rooms: a note that names a room is only chosen when that room is asked about or the satellite that heard the question stands there.
+- When a correction is learned whose wording an automation with a sentence trigger answers first, the tool tells the assistant, so it can tell the user.
+
+### Changed
+
+- A correction for the same situation in other words replaces the existing one instead of adding a second; the tool reports which one it replaced.
+
 ## [0.2.3] – 2026-11-12
 
 ### Changed

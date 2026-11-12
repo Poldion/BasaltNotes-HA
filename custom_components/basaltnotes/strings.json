@@ -38,10 +38,16 @@
       "init": {
         "title": "BasaltNotes",
         "data": {
-          "memory_budget": "Characters of matching notes per question"
+          "memory_budget": "Characters of matching notes per question",
+          "embedding_url": "Embedding server (optional)",
+          "embedding_model": "Embedding model",
+          "embedding_api_key": "API key of the embedding server"
         },
         "data_description": {
-          "memory_budget": "Corrections and facts are searched for each question, and only the best matches go into the prompt, up to this length. The rest costs nothing."
+          "memory_budget": "Corrections and facts are searched for each question, and only the best matches go into the prompt, up to this length. The rest costs nothing.",
+          "embedding_url": "OpenAI-compatible address of the server ending in /v1; for Ollama the server with port 11434 and /v1. Then notes are chosen by meaning, not only by shared words. Empty = words only.",
+          "embedding_model": "For Ollama for example embeddinggemma (ollama pull embeddinggemma).",
+          "embedding_api_key": "Only if the server needs one."
         }
       }
     }

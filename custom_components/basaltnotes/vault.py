@@ -15,6 +15,7 @@ from homeassistant.helpers.storage import Store
 
 from .api import BasaltClient, BasaltError
 from .const import DOMAIN
+from .embeddings import Embedder, EmbeddingError, cosine
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,6 +30,17 @@ MAX_TITLE = 80
 CONTEXT_LIMIT = 5
 # A note stays if it scores at least this share of the best match.
 CONTEXT_MIN_SHARE = 0.5
+# With embeddings: a note fits from this similarity on (measured with EmbeddingGemma on real corrections: fitting
+# ones mostly 0.38 to 0.70, unrelated ones mostly below 0.30) ...
+EMBEDDING_MIN = 0.36
+# ... a note that shares rare words with the question already from this one ...
+EMBEDDING_WORD_MIN = 0.30
+# ... and only if it is at most this far behind the best match.
+EMBEDDING_SPREAD = 0.12
+# Embedding the question must not hold up a voice command; without it the words decide.
+EMBEDDING_TIMEOUT = 1.5
+# A new correction replaces an existing one if their content words overlap at least this much.
+SAME_SITUATION = 0.75
 # Words that say nothing about the topic; without them "Wenn ich sage ..." would match every correction.
 STOP_WORDS = frozenset(
     [
@@ -209,6 +221,11 @@ TEXTS = {
             "und die Bettbeleuchtung aus.'"
         ),
         "forget_learned": "Löscht eine gespeicherte Korrektur.",
+        "trigger_warning": (
+            "„{wording}“ beantwortet eine Satz-Automation in Home Assistant, bevor die Anfrage bei dir ankommt. "
+            "Die Korrektur ist gespeichert, wirkt dort aber nicht. Sag dem Nutzer, dass er dafür die Automation "
+            "ändern muss."
+        ),
         "forget_learned_when": "Der 'when'-Text der Korrektur",
     },
     "en": {
@@ -246,6 +263,10 @@ TEXTS = {
             "and turn off the bed lights.'"
         ),
         "forget_learned": "Deletes a stored correction.",
+        "trigger_warning": (
+            "“{wording}” is answered by a sentence automation in Home Assistant before the request reaches you. The "
+            "correction is stored but has no effect there. Tell the user that the automation has to be changed for it."
+        ),
         "forget_learned_when": "The 'when' text of the correction",
     },
 }
@@ -298,6 +319,28 @@ def _score(query: set[str], text: str) -> int:
     return sum(_matches(word, found) for word in query)
 
 
+def _similarity(a: str, b: str) -> float:
+    """Share of content words two texts have in common (0 to 1)."""
+    words_a, words_b = _words(a), _words(b)
+    if not words_a or not words_b:
+        return 0.0
+    shared = sum(_matches(word, words_b) for word in words_a)
+    return shared / (len(words_a) + len(words_b) - shared)
+
+
+def _mentions(names: set[str], text: str) -> bool:
+    """Whether a text names a room: the name as a word, or at the start of a compound ("Laborlicht")."""
+    words = set(re.findall(r"\w+", text.casefold()))
+    folded = text.casefold()
+    for name in names:
+        if " " in name:
+            if name in folded:
+                return True
+        elif name in words or (len(name) >= 5 and any(word.startswith(name) for word in words)):
+            return True
+    return False
+
+
 def _short_title(text: str) -> str:
     first_line = " ".join(text.split())
     return first_line[:MAX_TITLE].rstrip() or "?"
@@ -331,6 +374,7 @@ class AssistVault:
         memory_folder: str,
         memory_budget: int,
         language: str,
+        embedder: Embedder | None = None,
     ) -> None:
         """Initialize the vault."""
         self.hass = hass
@@ -342,6 +386,9 @@ class AssistVault:
         self.memory_budget = memory_budget
         self.texts = texts_for(language)
         self.notes: dict[str, Note] = {}
+        self.embedder = embedder
+        # note id -> (version, vector) of the corrections and facts
+        self.vectors: dict[str, tuple[str, list[float]]] = {}
         self._fetched_at = 0.0
         self._lock = asyncio.Lock()
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}")
@@ -388,6 +435,9 @@ class AssistVault:
         """Load the copy from the last run."""
         if stored := await self._store.async_load():
             self.notes = {n["id"]: Note(**n) for n in stored["notes"]}
+            vectors = stored.get("vectors") or {}
+            if self.embedder and vectors.get("model") == self.embedder.model:
+                self.vectors = {k: (v[0], v[1]) for k, v in vectors["items"].items()}
 
     async def async_refresh(self) -> None:
         """Read the vault; only notes that changed since the last time are fetched completely."""
@@ -416,30 +466,100 @@ class AssistVault:
             changed = notes != self.notes
             self.notes = notes
             self._fetched_at = time.monotonic()
+            changed = await self._async_update_vectors() or changed
         if changed:
             self._store.async_delay_save(self._as_stored, 5)
 
-    def _as_stored(self) -> dict[str, Any]:
-        return {"notes": [asdict(note) for note in self.notes.values()]}
+    async def _async_update_vectors(self) -> bool:
+        """Embed the corrections and facts that are new or changed; a failure leaves them to the word search."""
+        if self.embedder is None:
+            return False
+        selectable = [*self.learned, *self.memories]
+        missing = [n for n in selectable if self.vectors.get(n.id, ("",))[0] != n.version]
+        known = {n.id for n in selectable}
+        dropped = [k for k in self.vectors if k not in known]
+        for key in dropped:
+            del self.vectors[key]
+        if not missing:
+            return bool(dropped)
+        try:
+            vectors = await self.embedder.async_embed([f"{n.title}: {n.text}" for n in missing], query=False)
+        except EmbeddingError as err:
+            _LOGGER.debug("Could not embed %d notes: %s", len(missing), err)
+            return bool(dropped)
+        for note, vector in zip(missing, vectors, strict=True):
+            self.vectors[note.id] = (note.version, [round(x, 5) for x in vector])
+        return True
 
-    async def async_get_prompt(self, question: str | None) -> str:
-        """Return the prompt section, using the last known copy if the server does not answer in time."""
+    def _as_stored(self) -> dict[str, Any]:
+        stored: dict[str, Any] = {"notes": [asdict(note) for note in self.notes.values()]}
+        if self.embedder:
+            stored["vectors"] = {
+                "model": self.embedder.model,
+                "items": {k: list(v) for k, v in self.vectors.items()},
+            }
+        return stored
+
+    async def _async_question_vector(self, text: str | None) -> list[float] | None:
+        if self.embedder is None or not text or not text.strip():
+            return None
+        try:
+            async with asyncio.timeout(EMBEDDING_TIMEOUT):
+                return (await self.embedder.async_embed([text], query=True))[0]
+        except (EmbeddingError, TimeoutError) as err:
+            _LOGGER.debug("Choosing notes by words, the question could not be embedded: %s", err)
+            return None
+
+    async def async_get_prompt(
+        self, question: str | None, *, here: str | None = None, rooms: dict[str, set[str]] | None = None
+    ) -> str:
+        """Return the prompt section, using the last known copy if the server does not answer in time.
+
+        here is the room of the satellite that heard the question, rooms maps every room to its names.
+        """
         if time.monotonic() - self._fetched_at > MAX_AGE:
             try:
                 async with asyncio.timeout(PROMPT_TIMEOUT):
                     await self.async_refresh()
             except (BasaltError, TimeoutError) as err:
                 _LOGGER.debug("Using the last known copy of the vault: %s", err)
-        return self.build_prompt(question)
+        vector = await self._async_question_vector(question)
+        return self.build_prompt(question, here=here, rooms=rooms, question_vector=vector)
 
-    def select_for(self, question: str | None) -> list[Note]:
+    def _for_room(
+        self, notes: list[Note], question: str, here: str | None, rooms: dict[str, set[str]] | None
+    ) -> list[Note]:
+        """Leave out notes about another room than the one asked about, or else the one of the satellite."""
+        if not rooms:
+            return notes
+        asked = {room for room, names in rooms.items() if _mentions(names, question)}
+        wanted = asked or ({here} if here else set())
+        if not wanted:
+            return notes
+        kept = []
+        for note in notes:
+            named = {room for room, names in rooms.items() if _mentions(names, f"{note.title} {note.text}")}
+            if not named or named & wanted:
+                kept.append(note)
+        return kept
+
+    def select_for(
+        self,
+        question: str | None,
+        *,
+        here: str | None = None,
+        rooms: dict[str, set[str]] | None = None,
+        question_vector: list[float] | None = None,
+    ) -> list[Note]:
         """Return the corrections and facts that fit a question, best first.
 
-        Rare words count more than common ones, so "Timer" decides over a word that many notes share.
+        With a question vector the meaning decides, otherwise the words: rare words count more than common ones,
+        so "Timer" decides over a word that many notes share.
         """
-        words = _words(question or "")
-        notes = [*self.learned, *self.memories]
-        if not words or not notes:
+        question = question or ""
+        notes = self._for_room([*self.learned, *self.memories], question, here, rooms)
+        words = _words(question)
+        if not notes or not (words or question_vector):
             return []
         found = {n.id: _words(f"{n.title} {n.text}") for n in notes}
         weights = {
@@ -447,28 +567,51 @@ class AssistVault:
             for word in words
             if (df := sum(_matches(word, found[n.id]) for n in notes))
         }
-        scored = [
-            (sum(w for word, w in weights.items() if _matches(word, found[n.id])), index, n)
-            for index, n in enumerate(notes)
-        ]
-        scored = sorted((item for item in scored if item[0]), key=lambda item: (-item[0], item[1]))
-        if not scored:
-            return []
-        best = scored[0][0]
+        word_scores = {
+            n.id: sum(w for word, w in weights.items() if _matches(word, found[n.id])) for n in notes
+        }
+        best_words = max(word_scores.values(), default=0)
+
+        def word_hit(note: Note) -> bool:
+            return best_words > 0 and word_scores[note.id] >= best_words * CONTEXT_MIN_SHARE
+
+        if question_vector is None:
+            ranked = [(word_scores[n.id], n) for n in notes if word_scores[n.id] and word_hit(n)]
+        else:
+            ranked = []
+            for note in notes:
+                vector = self.vectors.get(note.id)
+                similarity = cosine(question_vector, vector[1]) if vector else None
+                if similarity is not None and similarity >= EMBEDDING_MIN:
+                    ranked.append((similarity + (0.05 if word_hit(note) else 0), note))
+                elif word_hit(note) and (similarity is None or similarity >= EMBEDDING_WORD_MIN):
+                    ranked.append((max(similarity or 0, EMBEDDING_MIN), note))
+            if ranked:
+                best = max(score for score, _ in ranked)
+                ranked = [(score, n) for score, n in ranked if score >= best - EMBEDDING_SPREAD]
+        order = {n.id: index for index, n in enumerate(notes)}
+        ranked.sort(key=lambda item: (-item[0], order[item[1].id]))
         chosen: list[Note] = []
         used = 0
-        for score, _, note in scored[:CONTEXT_LIMIT]:
+        for _, note in ranked[:CONTEXT_LIMIT]:
             used += len(note.title) + len(note.text)
-            if score < best * CONTEXT_MIN_SHARE or used > self.memory_budget:
+            if used > self.memory_budget:
                 break
             chosen.append(note)
         return chosen
 
-    def build_prompt(self, question: str | None) -> str:
+    def build_prompt(
+        self,
+        question: str | None,
+        *,
+        here: str | None = None,
+        rooms: dict[str, set[str]] | None = None,
+        question_vector: list[float] | None = None,
+    ) -> str:
         """Build the prompt section: fixed instructions, plus only the notes that fit the question."""
         texts = self.texts
         parts = [texts["instructions"], *(n.text for n in self.instructions if n.text), "", texts["tools"]]
-        chosen = self.select_for(question)
+        chosen = self.select_for(question, here=here, rooms=rooms, question_vector=question_vector)
         learned = [n for n in chosen if self._in_folder(n, self.learned_folder)]
         facts = [n for n in chosen if self._in_folder(n, self.memory_folder)]
         if learned:
@@ -503,6 +646,13 @@ class AssistVault:
         except BasaltError as err:
             _LOGGER.debug("Searching the last known copy of the vault: %s", err)
         memories = self.memories
+        if (vector := await self._async_question_vector(query)) is not None:
+            scored = [(cosine(vector, self.vectors[n.id][1]), n) for n in memories if n.id in self.vectors]
+            hits = [
+                n for score, n in sorted(scored, key=lambda item: -item[0]) if score >= EMBEDDING_WORD_MIN
+            ]
+            if hits:
+                return [n.text for n in hits[:RECALL_LIMIT]], len(memories)
         words = _words(query or "")
         ranked = sorted(
             ((_score(words, f"{n.title} {n.text}"), index, n) for index, n in enumerate(memories)),
@@ -532,15 +682,28 @@ class AssistVault:
         wanted = _normalize(when)
         return next((n for n in self.learned if _normalize(n.title) == wanted), None)
 
-    async def async_learn(self, when: str, then: str) -> None:
-        """Store a correction; the same wording replaces the old one."""
+    async def async_learn(self, when: str, then: str) -> str | None:
+        """Store a correction; the same situation in other words replaces the old one, whose title is returned."""
         when, then = _tidy_when(when, self.texts["when"]), _tidy(then, sentence=True)
         await self.async_refresh()
-        if note := self._find_learned(when):
-            await self.client.async_update_note(self.vault_id, note.id, note.title, then)
+        note = self._find_learned(when)
+        if note is None:
+            similar = max(
+                ((_similarity(when, n.title), n) for n in self.learned),
+                default=(0.0, None),
+                key=lambda item: item[0],
+            )
+            if similar[0] >= SAME_SITUATION:
+                note = similar[1]
+        replaced = note.title if note and _normalize(note.title) != _normalize(when) else None
+        if note:
+            await self.client.async_update_note(
+                self.vault_id, note.id, when if replaced else note.title, then
+            )
         else:
             await self.client.async_create_note(self.vault_id, self.learned_folder, when, then)
         await self._async_write_done()
+        return replaced
 
     async def async_forget_learned(self, when: str) -> bool:
         """Delete a correction. Hand-written instructions are out of reach of the tools."""

@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from custom_components.basaltnotes.api import BasaltConnectionError, BasaltNotFoundError
+from custom_components.basaltnotes.embeddings import EmbeddingError
 from custom_components.basaltnotes.vault import AssistVault
 from homeassistant.setup import async_setup_component
 
@@ -79,6 +80,7 @@ class FakeClient:
     async def async_update_note(self, vault, note_id, title, body):
         self._check()
         note = self.notes[note_id]
+        note["title"] = title
         note["text"] = body
         note["version"] += "x"
         return note
@@ -109,4 +111,58 @@ def vault(hass, client) -> AssistVault:
         memory_folder="Gedächtnis",
         memory_budget=60,
         language="de",
+    )
+
+
+# Words that mean the same thing get the same dimension, so the fake behaves like a model that knows meaning
+CONCEPTS = [
+    ("uhrzeit", "spät", "zeit"),
+    ("parken", "geparkt", "auto", "steht"),
+    ("licht", "lampe", "hell"),
+    ("timer", "wecker"),
+    ("kochen", "essen", "koriander"),
+]
+
+
+class FakeEmbedder:
+    """Embeds by concepts; can be switched off to simulate a server that is down."""
+
+    model = "fake"
+
+    def __init__(self) -> None:
+        self.offline = False
+        self.calls = 0
+
+    async def async_embed(self, texts, *, query):
+        if self.offline:
+            raise EmbeddingError("offline")
+        self.calls += 1
+        vectors = []
+        for text in texts:
+            folded = text.casefold()
+            vector = [float(any(word in folded for word in words)) for words in CONCEPTS]
+            vectors.append([*vector, 0.1])
+        return vectors
+
+
+@pytest.fixture
+def embedder() -> FakeEmbedder:
+    """Return the fake embedder."""
+    return FakeEmbedder()
+
+
+@pytest.fixture
+def smart_vault(hass, client, embedder) -> AssistVault:
+    """Return a vault that chooses notes with the fake embedder."""
+    return AssistVault(
+        hass,
+        client,
+        "test-smart",
+        vault_id="assist",
+        instructions_folder="Anweisungen",
+        learned_folder="Gelernt",
+        memory_folder="Gedächtnis",
+        memory_budget=600,
+        language="de",
+        embedder=embedder,
     )

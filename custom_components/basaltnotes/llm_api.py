@@ -8,10 +8,11 @@ import probatio
 
 from homeassistant.components.conversation.chat_log import current_chat_log
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import llm
+from homeassistant.helpers import area_registry as ar, device_registry as dr, llm
 
 from .api import BasaltError
 from .const import DOMAIN, LLM_API_ASSIST_ID, LLM_API_ID
+from .triggers import async_find_trigger
 from .vault import AssistVault
 
 
@@ -28,6 +29,7 @@ class _VaultTool(llm.Tool):
         self, hass: HomeAssistant, tool_input: llm.ToolInput, llm_context: llm.LLMContext
     ) -> llm.ToolResult | dict[str, Any]:
         """Run the tool; a server problem is reported to the model, so it can tell the user."""
+        self.hass = hass
         try:
             return await self._async_run(tool_input.tool_args)
         except BasaltError as err:
@@ -111,8 +113,12 @@ class LearnInstructionTool(_VaultTool):
         )
 
     async def _async_run(self, args: dict[str, Any]) -> dict[str, Any]:
-        await self.vault.async_learn(args["when"], args["then"])
-        return {"ok": True}
+        result: dict[str, Any] = {"ok": True}
+        if replaced := await self.vault.async_learn(args["when"], args["then"]):
+            result["replaced"] = replaced
+        if wording := await async_find_trigger(self.hass, args["when"], self.hass.config.language):
+            result["warning"] = self.vault.texts["trigger_warning"].format(wording=wording)
+        return result
 
 
 class ForgetInstructionTool(_VaultTool):
@@ -140,6 +146,19 @@ def _current_question() -> str | None:
     return next((c.content for c in reversed(chat_log.content) if c.role == "user"), None)
 
 
+def _rooms(hass: HomeAssistant, device_id: str | None) -> tuple[str | None, dict[str, set[str]]]:
+    """Return the room of the device that heard the question and the names of every room."""
+    areas = ar.async_get(hass)
+    rooms = {
+        area.id: {name.casefold() for name in (area.name, *area.aliases) if name and len(name) >= 3}
+        for area in areas.async_list_areas()
+    }
+    here = None
+    if device_id and (device := dr.async_get(hass).async_get(device_id)):
+        here = device.area_id
+    return here, rooms
+
+
 class BasaltLLMAPI(llm.API):
     """The vault as an LLM API, optionally together with the Assist tools."""
 
@@ -153,7 +172,8 @@ class BasaltLLMAPI(llm.API):
 
     async def async_get_api_instance(self, llm_context: llm.LLMContext) -> llm.APIInstance:
         """Return the prompt and the tools for one conversation."""
-        prompt = await self.vault.async_get_prompt(_current_question())
+        here, rooms = _rooms(self.hass, llm_context.device_id)
+        prompt = await self.vault.async_get_prompt(_current_question(), here=here, rooms=rooms)
         tools: list[llm.Tool] = [
             tool(self.vault)
             for tool in (

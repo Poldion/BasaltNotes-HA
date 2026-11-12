@@ -27,12 +27,16 @@ from homeassistant.helpers.selector import (
 
 from .api import BasaltAuthError, BasaltClient, BasaltConnectionError, BasaltError
 from .const import (
+    CONF_EMBEDDING_KEY,
+    CONF_EMBEDDING_MODEL,
+    CONF_EMBEDDING_URL,
     CONF_INSTRUCTIONS_FOLDER,
     CONF_LEARNED_FOLDER,
     CONF_MEMORY_BUDGET,
     CONF_MEMORY_FOLDER,
     CONF_VAULT_ID,
     CONF_VAULT_NAME,
+    DEFAULT_EMBEDDING_MODEL,
     DEFAULT_MEMORY_BUDGET,
     DEFAULT_VAULT_NAME,
     DOMAIN,
@@ -161,20 +165,42 @@ class BasaltConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class BasaltOptionsFlow(OptionsFlow):
-    """Change how much memory goes into the prompt."""
+    """Change how notes are chosen for the prompt."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Ask for the budget."""
+        """Ask for the budget and the optional embedding server."""
         if user_input is not None:
-            return self.async_create_entry(data={CONF_MEMORY_BUDGET: int(user_input[CONF_MEMORY_BUDGET])})
-        current = self.config_entry.options.get(CONF_MEMORY_BUDGET, DEFAULT_MEMORY_BUDGET)
+            return self.async_create_entry(
+                data={
+                    CONF_MEMORY_BUDGET: int(user_input[CONF_MEMORY_BUDGET]),
+                    CONF_EMBEDDING_URL: (user_input.get(CONF_EMBEDDING_URL) or "").strip(),
+                    CONF_EMBEDDING_MODEL: (
+                        user_input.get(CONF_EMBEDDING_MODEL) or DEFAULT_EMBEDDING_MODEL
+                    ).strip(),
+                    CONF_EMBEDDING_KEY: user_input.get(CONF_EMBEDDING_KEY) or "",
+                }
+            )
+        options = self.config_entry.options
         return self.async_show_form(
             step_id="init",
-            data_schema=probatio.Schema(
+            data_schema=self.add_suggested_values_to_schema(
+                probatio.Schema(
+                    {
+                        probatio.Required(CONF_MEMORY_BUDGET): NumberSelector(
+                            NumberSelectorConfig(min=0, max=20000, step=100, mode=NumberSelectorMode.BOX)
+                        ),
+                        probatio.Optional(CONF_EMBEDDING_URL): TextSelector(
+                            TextSelectorConfig(type=TextSelectorType.URL)
+                        ),
+                        probatio.Optional(CONF_EMBEDDING_MODEL): TextSelector(),
+                        probatio.Optional(CONF_EMBEDDING_KEY): _TOKEN_SELECTOR,
+                    }
+                ),
                 {
-                    probatio.Required(CONF_MEMORY_BUDGET, default=current): NumberSelector(
-                        NumberSelectorConfig(min=0, max=20000, step=100, mode=NumberSelectorMode.BOX)
-                    )
-                }
+                    CONF_MEMORY_BUDGET: options.get(CONF_MEMORY_BUDGET, DEFAULT_MEMORY_BUDGET),
+                    CONF_EMBEDDING_URL: options.get(CONF_EMBEDDING_URL, ""),
+                    CONF_EMBEDDING_MODEL: options.get(CONF_EMBEDDING_MODEL, DEFAULT_EMBEDDING_MODEL),
+                    CONF_EMBEDDING_KEY: options.get(CONF_EMBEDDING_KEY, ""),
+                },
             ),
         )

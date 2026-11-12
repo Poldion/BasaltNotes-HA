@@ -38,10 +38,16 @@
       "init": {
         "title": "BasaltNotes",
         "data": {
-          "memory_budget": "Zeichen passender Notizen je Frage"
+          "memory_budget": "Zeichen passender Notizen je Frage",
+          "embedding_url": "Embedding-Server (optional)",
+          "embedding_model": "Embedding-Modell",
+          "embedding_api_key": "API-Schlüssel des Embedding-Servers"
         },
         "data_description": {
-          "memory_budget": "Korrekturen und Fakten werden zu jeder Frage durchsucht, nur die besten Treffer kommen bis zu dieser Länge in den Prompt. Der Rest kostet nichts."
+          "memory_budget": "Korrekturen und Fakten werden zu jeder Frage durchsucht, nur die besten Treffer kommen bis zu dieser Länge in den Prompt. Der Rest kostet nichts.",
+          "embedding_url": "OpenAI-kompatible Adresse des Servers mit /v1 am Ende; bei Ollama der Server mit Port 11434 und /v1. Dann werden Notizen nach Bedeutung ausgewählt, nicht nur nach gleichen Wörtern. Leer = nur Wörter.",
+          "embedding_model": "Für Ollama zum Beispiel embeddinggemma (ollama pull embeddinggemma).",
+          "embedding_api_key": "Nur nötig, wenn der Server einen verlangt."
         }
       }
     }

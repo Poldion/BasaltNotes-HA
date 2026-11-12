@@ -22,6 +22,10 @@ Notiz, die du in BasaltNotes oder Obsidian lesen und ändern kannst, mit Git-Ver
 | **Anweisungen** | Notizen direkt in `Anweisungen/` stehen immer im Systemprompt, sortiert nach Pfad, halte sie also kurz. `enabled: false` in den Eigenschaften schaltet eine Notiz ab |
 | **Korrekturen** | „Das war falsch, ich meinte …“ wird als Notiz in `Anweisungen/Gelernt/` gespeichert: Titel = Wenn, Text = Dann |
 | **Kleine Prompts** | Korrekturen und Fakten werden zu jeder Frage durchsucht. Nur die besten Treffer kommen in den Prompt, er wächst also nicht mit der Zahl der Notizen |
+| **Nach Bedeutung** | Optional: Mit einem Embedding-Modell (z. B. EmbeddingGemma auf Ollama) werden Notizen nach Bedeutung ausgewählt, „Wie spät ist es?“ findet also auch eine Korrektur zur „Uhrzeit“. Ohne den Server entscheiden die Wörter |
+| **Räume** | Eine Notiz, die einen Raum nennt, kommt nur in diesem Raum zum Zug: wenn er genannt wird oder der Satellit dort steht |
+| **Keine Doppelten** | Eine Korrektur zur selben Situation in anderen Worten ersetzt die alte, statt eine zweite anzulegen |
+| **Satz-Automationen** | Beantwortet eine Automation mit Satz-Trigger die Formulierung, bevor der Assistent sie hört, sagt er das beim Lernen der Korrektur |
 | **Gedächtnis** | Fakten sind Notizen in `Gedächtnis/`. Der Assistent bekommt die passenden mit der Frage und kann sie auch per Werkzeug suchen |
 | **Werkzeuge** | `remember`, `recall`, `forget`, `learn_instruction`, `forget_instruction` |
 | **Geschützte Regeln** | Die Werkzeuge ändern nur `Gedächtnis/` und `Anweisungen/Gelernt/`. Deine eigenen Anweisungen lassen sich nicht per Sprache ändern |
@@ -60,6 +64,9 @@ Die Ordner heißen so wie die Sprache deines Home Assistant beim Verbinden (Engl
 | Option | Standard | Bedeutung |
 |---|---|---|
 | Zeichen passender Notizen je Frage | `600` | Obergrenze für Korrekturen und Fakten im Prompt, höchstens 5 Notizen. `0` = Fakten nur über das Suchwerkzeug |
+| Embedding-Server | – | OpenAI-kompatible Adresse mit `/v1` am Ende, z. B. `http://nas.local:11434/v1` für Ollama. Leer = nur Wörter |
+| Embedding-Modell | `embeddinggemma` | Auf Ollama mit `ollama pull embeddinggemma` installieren |
+| API-Schlüssel des Embedding-Servers | – | Nur nötig, wenn der Server einen verlangt |
 
 Änderungen im Vault gelten ab dem nächsten Gespräch, spätestens nach 60 Sekunden.
 

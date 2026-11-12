@@ -22,6 +22,10 @@ BasaltNotes or Obsidian, with git history and a trash.
 | **Instructions** | Notes directly in `Instructions/` are always part of the system prompt, sorted by path, so keep them short. `enabled: false` in the frontmatter switches a note off |
 | **Corrections** | “That was wrong, I meant …” is stored as a note in `Instructions/Learned/`: title = when, text = then |
 | **Small prompts** | Corrections and facts are searched for each question. Only the best matches go into the prompt, so it does not grow with the number of notes |
+| **By meaning** | Optional: with an embedding model (e.g. EmbeddingGemma on Ollama) notes are chosen by meaning, so “What time is it?” finds a correction about “the clock”. Without the server the words decide |
+| **Rooms** | A note that names a room only comes up in that room: asked there, or said to the satellite standing there |
+| **No duplicates** | A correction for the same situation in other words replaces the old one instead of adding a second |
+| **Sentence automations** | If an automation with a sentence trigger answers the wording before the assistant hears it, the assistant says so when learning the correction |
 | **Memory** | Facts are notes in `Memory/`. The assistant gets the matching ones with the question and can also look them up with a tool |
 | **Tools** | `remember`, `recall`, `forget`, `learn_instruction`, `forget_instruction` |
 | **Protected rules** | The tools only touch `Memory/` and `Instructions/Learned/`. Your own instructions cannot be changed by voice |
@@ -60,6 +64,9 @@ The folders are named in the language of your Home Assistant when the vault is c
 | Option | Default | Meaning |
 |---|---|---|
 | Characters of matching notes per question | `600` | Upper limit for corrections and facts in the prompt, at most 5 notes. `0` = facts only through the search tool |
+| Embedding server | – | OpenAI-compatible address ending in `/v1`, e.g. `http://nas.local:11434/v1` for Ollama. Empty = words only |
+| Embedding model | `embeddinggemma` | Install it on Ollama with `ollama pull embeddinggemma` |
+| API key of the embedding server | – | Only if the server needs one |
 
 Changes in the vault apply to the next conversation, at most 60 seconds later.
 

@@ -14,14 +14,19 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import BasaltAuthError, BasaltClient, BasaltError
 from .const import (
+    CONF_EMBEDDING_KEY,
+    CONF_EMBEDDING_MODEL,
+    CONF_EMBEDDING_URL,
     CONF_INSTRUCTIONS_FOLDER,
     CONF_LEARNED_FOLDER,
     CONF_MEMORY_BUDGET,
     CONF_MEMORY_FOLDER,
     CONF_VAULT_ID,
+    DEFAULT_EMBEDDING_MODEL,
     DEFAULT_MEMORY_BUDGET,
     DOMAIN,
 )
+from .embeddings import Embedder
 from .llm_api import async_register_apis
 from .vault import AssistVault
 
@@ -34,7 +39,16 @@ type BasaltConfigEntry = ConfigEntry[DataUpdateCoordinator[None]]
 
 async def async_setup_entry(hass: HomeAssistant, entry: BasaltConfigEntry) -> bool:
     """Connect to the vault and offer the LLM APIs."""
-    client = BasaltClient(async_get_clientsession(hass), entry.data[CONF_URL], entry.data[CONF_TOKEN])
+    session = async_get_clientsession(hass)
+    client = BasaltClient(session, entry.data[CONF_URL], entry.data[CONF_TOKEN])
+    embedder = None
+    if url := entry.options.get(CONF_EMBEDDING_URL):
+        embedder = Embedder(
+            session,
+            url,
+            entry.options.get(CONF_EMBEDDING_MODEL) or DEFAULT_EMBEDDING_MODEL,
+            entry.options.get(CONF_EMBEDDING_KEY) or None,
+        )
     vault = AssistVault(
         hass,
         client,
@@ -45,6 +59,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BasaltConfigEntry) -> bo
         memory_folder=entry.data[CONF_MEMORY_FOLDER],
         memory_budget=entry.options.get(CONF_MEMORY_BUDGET, DEFAULT_MEMORY_BUDGET),
         language=hass.config.language,
+        embedder=embedder,
     )
     await vault.async_load()
 
