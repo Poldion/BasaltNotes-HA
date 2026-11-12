@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1] – 2026-11-12
+
+### Fixed
+
+- Learned corrections are written as complete sentences: the tool now describes both fields with examples, and the text is tidied before it is stored (capital first letter, full stop, no stray quotes).
+- Corrections appear in the prompt as “situation: what to do” instead of repeating “When:” in front of a sentence that already starts with it.
+
 ## [0.2.0] – 2026-11-02
 
 ### Changed

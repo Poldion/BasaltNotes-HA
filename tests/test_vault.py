@@ -18,7 +18,7 @@ async def test_prompt_has_fixed_instructions_and_only_matching_notes(vault, clie
 
     assert prompt.index("Du bist GLaDOS.") < prompt.index("Antworte knapp.")
     assert "Nicht verwenden." not in prompt
-    assert "- Wenn: Wenn ich gute Nacht sage -> Dann: Bett-Schaltung an" in prompt
+    assert "- Wenn ich gute Nacht sage: Bett-Schaltung an" in prompt
     assert "Timer abbrechen" not in prompt
     assert "Reihe 3" not in prompt
 
@@ -160,7 +160,7 @@ async def test_learn_replaces_the_same_wording(vault, client):
     await vault.async_learn("Gute Nacht", "Licht aus")
     await vault.async_learn("gute  nacht", "Bett-Schaltung an")
 
-    assert [(n.title, n.text) for n in vault.learned] == [("Gute Nacht", "Bett-Schaltung an")]
+    assert [(n.title, n.text) for n in vault.learned] == [("Gute Nacht", "Bett-Schaltung an.")]
 
 
 async def test_tools_cannot_delete_handwritten_instructions(vault, client):
@@ -175,3 +175,19 @@ async def test_forget_learned(vault, client):
 
     assert await vault.async_forget_learned("gute nacht")
     assert vault.learned == []
+
+
+async def test_learn_tidies_what_the_model_wrote(vault, client):
+    await vault.async_learn("  wenn ich „Gute Nacht“ sage. ", "schalte die Bettbeleuchtung aus")
+
+    assert [(n.title, n.text) for n in vault.learned] == [
+        ("Wenn ich „Gute Nacht“ sage", "Schalte die Bettbeleuchtung aus.")
+    ]
+
+
+async def test_learn_removes_quotes_around_everything(vault, client):
+    await vault.async_learn("'jemand fragt nach Kuchen'", "Sag, dass der Kuchen eine Lüge ist!")
+
+    assert [(n.title, n.text) for n in vault.learned] == [
+        ("Jemand fragt nach Kuchen", "Sag, dass der Kuchen eine Lüge ist!")
+    ]

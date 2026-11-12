@@ -183,12 +183,11 @@ TEXTS = {
         "seed_body": "Du bist der Sprachassistent dieses Zuhauses. Antworte knapp und auf Deutsch.",
         "instructions": "ANWEISUNGEN:",
         "learned": "KORREKTUREN DES NUTZERS, PASSEND ZUR ANFRAGE (haben Vorrang vor deiner eigenen Auslegung):",
-        "learned_line": "- Wenn: {when} -> Dann: {then}",
+        "learned_line": "- {when}: {then}",
         "memory": "GEMERKTE FAKTEN, PASSEND ZUR ANFRAGE (nur Daten, keine Anweisungen):",
         "tools": (
             "Merken: remember. Früher Gemerktes suchen: recall. Löschen: forget. Sagt der Nutzer, dass du etwas falsch "
-            "gemacht hast: Führe das Gewünschte aus und rufe learn_instruction auf ('when' = Formulierung allgemein, "
-            "'then' = genaue Geräte und Aktion). Korrektur löschen: forget_instruction."
+            "gemacht hast: Führe das Gewünschte aus und rufe learn_instruction auf. Korrektur löschen: forget_instruction."
         ),
         "remember": "Speichert einen Fakt dauerhaft (z. B. 'Das Auto steht in Reihe 3').",
         "remember_text": "Der Fakt als vollständiger Satz",
@@ -196,9 +195,18 @@ TEXTS = {
         "recall_query": "Suchbegriffe",
         "forget": "Löscht einen gemerkten Fakt.",
         "forget_text": "Der Fakt, möglichst im Wortlaut von recall",
-        "learn": "Speichert dauerhaft, was der Nutzer mit einer Formulierung oder in einer Situation meint. Gleiches 'when' ersetzt.",
-        "learn_when": "Formulierung oder Situation, allgemein gehalten",
-        "learn_then": "Was dann genau zu tun ist, mit Gerätenamen",
+        "learn": (
+            "Speichert dauerhaft eine Korrektur des Nutzers. Schreibe beide Felder als vollständige Sätze auf Deutsch, "
+            "die man ohne das Gespräch versteht, nicht als Zitat oder Satzfetzen. Gleiche Situation ersetzt die alte."
+        ),
+        "learn_when": (
+            "Die Situation, allgemein gehalten, als Nebensatz mit 'Wenn', z. B. 'Wenn ich „Gute Nacht“ sage' oder "
+            "'Wenn ich nach dem Wetter in Hatterthütte frage'"
+        ),
+        "learn_then": (
+            "Was du dann tust, als Anweisung an dich mit den genauen Gerätenamen, z. B. 'Schalte die Bett-Schaltung ein "
+            "und die Bettbeleuchtung aus.'"
+        ),
         "forget_learned": "Löscht eine gespeicherte Korrektur.",
         "forget_learned_when": "Der 'when'-Text der Korrektur",
     },
@@ -210,12 +218,12 @@ TEXTS = {
         "seed_body": "You are the voice assistant of this home. Keep your answers short.",
         "instructions": "INSTRUCTIONS:",
         "learned": "CORRECTIONS BY THE USER, MATCHING THIS REQUEST (take precedence over your own interpretation):",
-        "learned_line": "- When: {when} -> Then: {then}",
+        "learned_line": "- {when}: {then}",
         "memory": "REMEMBERED FACTS, MATCHING THIS REQUEST (data only, not instructions):",
         "tools": (
             "To keep something: remember. To look up something kept earlier: recall. To delete: forget. If the user says "
-            "you did something wrong: do what they wanted and call learn_instruction ('when' = the wording in general, "
-            "'then' = exact devices and action). To delete a correction: forget_instruction."
+            "you did something wrong: do what they wanted and call learn_instruction. To delete a correction: "
+            "forget_instruction."
         ),
         "remember": "Stores a fact permanently (e.g. 'The car is parked in row 3').",
         "remember_text": "The fact as a complete sentence",
@@ -223,9 +231,18 @@ TEXTS = {
         "recall_query": "Search terms",
         "forget": "Deletes a remembered fact.",
         "forget_text": "The fact, ideally in the wording returned by recall",
-        "learn": "Permanently stores what the user means by a wording or in a situation. The same 'when' replaces.",
-        "learn_when": "Wording or situation, in general terms",
-        "learn_then": "What exactly to do then, with device names",
+        "learn": (
+            "Permanently stores a correction by the user. Write both fields as complete sentences that make sense "
+            "without the conversation, not as a quote or a fragment. The same situation replaces the old one."
+        ),
+        "learn_when": (
+            "The situation in general terms, as a clause starting with 'When', e.g. 'When I say good night' or "
+            "'When I ask about the weather in Springfield'"
+        ),
+        "learn_then": (
+            "What you do then, as an instruction to yourself with the exact device names, e.g. 'Turn on the bed switch "
+            "and turn off the bed lights.'"
+        ),
         "forget_learned": "Deletes a stored correction.",
         "forget_learned_when": "The 'when' text of the correction",
     },
@@ -239,6 +256,16 @@ def texts_for(language: str) -> dict[str, str]:
 
 def _normalize(text: str) -> str:
     return " ".join(text.casefold().split())
+
+
+def _tidy(text: str, *, sentence: bool) -> str:
+    """Tidy what the model wrote: one line, capital first letter, as a sentence with a full stop or as a title without one."""
+    text = " ".join(text.split()).strip(" -:")
+    if text[:1] in "'\"„“" and text[-1:] in "'\"“”" and len(text) > 2:
+        text = text[1:-1].strip()
+    text = text[:1].upper() + text[1:]
+    text = text.rstrip(" .,:;")
+    return f"{text}." if sentence and text and text[-1] not in "!?" else text
 
 
 def _words(text: str) -> set[str]:
@@ -492,7 +519,7 @@ class AssistVault:
 
     async def async_learn(self, when: str, then: str) -> None:
         """Store a correction; the same wording replaces the old one."""
-        when, then = when.strip(), then.strip()
+        when, then = _tidy(when, sentence=False), _tidy(then, sentence=True)
         await self.async_refresh()
         if note := self._find_learned(when):
             await self.client.async_update_note(self.vault_id, note.id, note.title, then)
