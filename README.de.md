@@ -5,7 +5,7 @@
 > Anweisungen und Gedächtnis deines Home-Assistant-Sprachassistenten als einfache Markdown-Notizen in
 > [BasaltNotes](https://github.com/Poldion/BasaltNotes).
 
-**Lizenz:** MIT · **Sprache:** Python · **Installation:** HACS (benutzerdefiniertes Repository) · **Voraussetzung:** Home
+**Lizenz:** MIT · **Sprache:** Python · **Installation:** Marketplace oder HACS (benutzerdefiniertes Repository) · **Voraussetzung:** Home
 Assistant 2026.10, BasaltNotes 0.24 · **Teil von:** [Poldion Self-Hosted](https://github.com/Poldion/BasaltNotes/blob/main/README.de.md)
 
 ## Überblick
@@ -35,8 +35,11 @@ Die Ordner heißen so wie die Sprache deines Home Assistant beim Verbinden (Engl
 
 1. In BasaltNotes: *Einstellungen → API-Tokens → neues Token* mit dem Recht, Vaults anzulegen (`create_vault`). Das Token
    sieht dann nur den Vault, den es selbst anlegt.
-2. In HACS: *Benutzerdefinierte Repositories* → `https://github.com/Poldion/BasaltNotes-HA`, Kategorie *Integration*.
-   Installieren und Home Assistant neu starten.
+2. `https://github.com/Poldion/BasaltNotes-HA` als benutzerdefiniertes Repository hinzufügen, Kategorie *Integration*,
+   installieren und Home Assistant neu starten:
+   - **Ab Home Assistant 2026.11:** im eingebauten *Marketplace*, der HACS ersetzt. Für eigene Repositories muss dort ein
+     GitHub-Konto verbunden sein.
+   - **Ältere Versionen:** in HACS unter *Benutzerdefinierte Repositories*.
 3. *Einstellungen → Geräte & Dienste → Integration hinzufügen → BasaltNotes*: Adresse (z. B. `http://nas.local:4400`),
    Token und Name des Vaults eintragen.
 4. In den Einstellungen des Gesprächsagenten unter *Home Assistant steuern* **Assist + BasaltNotes** wählen.

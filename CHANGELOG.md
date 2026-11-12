@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.3] – 2026-11-12
+
+### Changed
+
+- The installation guide covers the Marketplace that is built into Home Assistant since 2026.11 and replaces HACS.
+
 ## [0.2.2] – 2026-11-12
 
 ### Fixed
